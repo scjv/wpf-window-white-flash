@@ -34,7 +34,7 @@ internal struct POINT
 internal static unsafe class Win32
 {
     private const int GWL_STYLE = -16, GWL_EXSTYLE = -20;
-    private const int WS_CAPTION = 0x00C00000, WS_DISABLED = 0x08000000;
+    private const int WS_CAPTION = 0x00C00000, WS_DISABLED = 0x08000000, WS_EX_LAYERED = 0x00080000;
     private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9, DWMWA_CLOAKED = 14;
     private static readonly nint DpiAwarenessPerMonitorV2 = -4;
 
@@ -60,7 +60,11 @@ internal static unsafe class Win32
     public static bool IsOnTop(nint hwnd, RECT client)
     {
         var centre = new POINT { X = (client.Left + client.Right) / 2, Y = (client.Top + client.Bottom) / 2 };
-        return GetAncestor(WindowFromPoint(centre), 2 /* GA_ROOT */) == hwnd;
+        var top = GetAncestor(WindowFromPoint(centre), 2 /* GA_ROOT */);
+        if (top == hwnd) return true;
+        // WindowFromPoint skips a transparent layered window, so the probe's own backdrop is found behind it.
+        GetWindowThreadProcessId(top, out var owner);
+        return (GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) != 0 && owner == Environment.ProcessId;
     }
 
     /// <summary>Physical pixels for every window, whatever DPI awareness the target process uses.</summary>

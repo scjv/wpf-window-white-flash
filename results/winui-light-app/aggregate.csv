@@ -1,0 +1,7 @@
+"mode","runs","covered_runs","flash_runs","dark_flash_runs","never_shown","median_shown_ms","max_peak","min_darkest","behind"
+"winui+light","6","0","1","0","0","47","255","64","64"
+"winui+light+noactivate","6","0","1","0","0","37.5","255","64","64"
+"winui+light+nofade","6","0","6","0","0","22.5","255","64","64"
+"winui+light+fix","6","0","0","0","0","139.5","242","64","64"
+"winui+light+fix+noactivate","6","0","0","0","0","125.5","242","64","64"
+"winui+light+fix+post","6","0","0","0","0","65","242","64","64"

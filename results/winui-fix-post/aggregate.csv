@@ -1,0 +1,5 @@
+"mode","runs","covered_runs","flash_runs","dark_flash_runs","never_shown","median_shown_ms","max_peak","min_darkest","behind"
+"winui+fix+post","8","0","0","0","0","48","64","33","64"
+"winui+fix+post+noactivate","8","0","0","0","0","40.5","64","33","64"
+"winui+fix+post+nofade","8","0","0","0","0","60.5","64","33","64"
+"winui+fix+post+heavy","8","0","0","0","0","87","64","37","64"

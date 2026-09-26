@@ -1,0 +1,11 @@
+Date: 2026-09-26
+OS: Microsoft Windows 11 Home 10.0.26200
+.NET SDK: 10.0.401
+Runtime: Microsoft.WindowsDesktop.App 10.0.12
+Windows App Runtime: Microsoft.WindowsAppRuntime.2 2.5.1.0
+Windows App SDK package: 2.5.1
+GPU: AMD Radeon(TM) 780M (driver 31.0.14005.22001), 2560x1600 @ 165 Hz
+GPU: NVIDIA GeForce RTX 4060 Laptop GPU (driver 32.0.15.7628), 3840x2160 @ 60 Hz
+Window animations (MinAnimate): 1
+AppsUseLightTheme: 0
+Runs per mode: 10, recorded after WS_VISIBLE: 1500 ms, backdrop: True

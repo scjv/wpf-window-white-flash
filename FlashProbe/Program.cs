@@ -67,6 +67,8 @@ internal static class Program
             RECT frame = default, client = default;
             var located = hwnd != 0 && Win32.IsWindowVisible(hwnd) && Win32.TryGetGeometry(hwnd, out frame, out client);
             var covered = located && !Win32.IsOnTop(hwnd, client);
+            // WindowFromPoint skips a cloaked window: one cloaked since the check above is not covered.
+            if (covered && Win32.IsCloaked(hwnd)) (cloaked, covered) = (true, false);
             var owner = located ? duplication.Outputs.FirstOrDefault(o => o.Bounds.ContainsCentreOf(frame)) : null;
             if (owner != null && visibleAt < 0)
             {
@@ -113,7 +115,7 @@ internal static class Program
 
     private static void Report(Options options, Measurement behind, List<FrameRecord> frames, List<(double At, string Name)> events)
     {
-        var csv = new StringBuilder("at_ms,present_ms,accumulated,cloaked,client_avg,client_light_pct,client_dark_pct,title_avg\n");
+        var csv = new StringBuilder("at_ms,present_ms,accumulated,cloaked,covered,client_avg,client_light_pct,client_dark_pct,title_avg\n");
         foreach (var f in frames)
             csv.AppendLine(string.Create(Invariant,
                 $"{f.At:F1},{f.Present:F1},{f.Accumulated},{f.Cloaked},{f.Covered},{f.M.Client.Avg:F1},{f.M.Client.LightPct:F1},{f.M.Client.DarkPct:F1},{f.M.Title.Avg:F1}"));
@@ -136,6 +138,10 @@ internal static class Program
         var limit = Math.Max(behind.Client.Avg, final) + 8;
         var flashes = onScreen.Where(f => f.M.Client.Avg > limit).ToList();
         var peak = onScreen.MaxBy(f => f.M.Client.Avg);
+        // The same the other way round: a frame darker than both (a black surface) is a dark flash frame.
+        var darkLimit = Math.Min(behind.Client.Avg, final) - 8;
+        var darkFlashes = onScreen.Where(f => f.M.Client.Avg < darkLimit).ToList();
+        var darkest = onScreen.MinBy(f => f.M.Client.Avg);
         var shown = onScreen.FirstOrDefault(f =>
             Math.Abs(f.M.Client.Avg - behind.Client.Avg) > 2 ||
             Math.Abs(f.M.Client.DarkPct - behind.Client.DarkPct) > 4 ||
@@ -143,9 +149,10 @@ internal static class Program
 
         string Round(double? value) => value is { } v ? v.ToString("F0", Invariant) : "";
         var flashSpan = flashes.Count > 0 ? $" ({Round(flashes[0].At)}..{Round(flashes[^1].At)} ms)" : "";
+        var darkSpan = darkFlashes.Count > 0 ? $" ({Round(darkFlashes[0].At)}..{Round(darkFlashes[^1].At)} ms)" : "";
         var shownText = shown is null ? "never" : Round(shown.At) + " ms";
         Console.WriteLine(string.Create(Invariant,
-            $"[{options.Label}] frames={frames.Count} behind={behind.Client.Avg:F0} final={final:F0} peak={peak?.M.Client.Avg ?? 0:F0}@{Round(peak?.At)}ms flash={flashes.Count} frames{flashSpan} shown={shownText}{(coveredFrames > 0 ? $" COVERED={coveredFrames} frames" : "")}"));
+            $"[{options.Label}] frames={frames.Count} behind={behind.Client.Avg:F0} final={final:F0} peak={peak?.M.Client.Avg ?? 0:F0}@{Round(peak?.At)}ms flash={flashes.Count} frames{flashSpan} dark={darkFlashes.Count} frames{darkSpan} low={darkest?.M.Client.Avg ?? 0:F0} shown={shownText}{(coveredFrames > 0 ? $" COVERED={coveredFrames} frames" : "")}"));
         var eventText = string.Join("; ", events.Select(e => string.Create(Invariant, $"{e.Name}@{e.At:F0}")));
         Console.WriteLine("    events: " + eventText);
         if (options.Verbose)
@@ -156,13 +163,14 @@ internal static class Program
         if (options.SummaryCsv is not { } summaryPath) return;
         Directory.CreateDirectory(Path.GetDirectoryName(summaryPath)!);
         var header = File.Exists(summaryPath) ? "" :
-            "label,target,args,frames,behind,final,peak,peak_ms,flash_frames,flash_from_ms,flash_to_ms,shown_ms,covered_frames,events" + Environment.NewLine;
+            "label,target,args,frames,behind,final,peak,peak_ms,flash_frames,flash_from_ms,flash_to_ms,shown_ms,covered_frames,dark_flash_frames,darkest,events" + Environment.NewLine;
         string[] row =
         [
             Quote(options.Label), Quote(Path.GetFileNameWithoutExtension(options.Exe)), Quote(options.ChildArgs),
             frames.Count.ToString(Invariant), Round(behind.Client.Avg), Round(final), Round(peak?.M.Client.Avg), Round(peak?.At),
             flashes.Count.ToString(Invariant), Round(flashes.FirstOrDefault()?.At), Round(flashes.LastOrDefault()?.At),
-            Round(shown?.At), coveredFrames.ToString(Invariant), Quote(eventText)
+            Round(shown?.At), coveredFrames.ToString(Invariant), darkFlashes.Count.ToString(Invariant), Round(darkest?.M.Client.Avg),
+            Quote(eventText)
         ];
         File.AppendAllText(summaryPath, header + string.Join(',', row) + Environment.NewLine);
     }

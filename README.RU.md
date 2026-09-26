@@ -4,7 +4,9 @@
 
 Окно WPF на .NET 10 в тёмной теме Fluent несколько кадров показывает светлый прямоугольник, прежде чем
 появится его тёмное содержимое. Здесь собраны минимальный репро, исправление и измерения, на которых они
-основаны: каждый кадр, собранный DWM за 521 запуск окна, записанный через DXGI Desktop Duplication.
+основаны: каждый кадр, собранный DWM за 589 запусков окна, записанный через DXGI Desktop Duplication. Теми же
+инструментами найдена похожая, тёмная вспышка в WinUI 3 и исправление для неё: см. [WinUI 3](#winui-3)
+(ещё 444 запуска).
 
 **Коротко**
 
@@ -25,6 +27,11 @@
   `CompositionTarget.Rendering`, видна белая поверхность; то же, если скрывать окно, которое открывается
   без активации. Раскрытие в `ContentRendered` без ожидания present почти достаточно: оно не сработало
   в 1 из 6 запусков на занятом компьютере и всегда — с тяжёлым первым кадром.
+- **WinUI 3** (Windows App SDK 2.5) показывает *чёрную* клиентскую область примерно с 40 мс после показа и до
+  первого кадра примерно на 130 мс, с активацией или без (9 из 10 запусков); светлое приложение — белую. Там работает то же скрытие:
+  скрыть окно сразу после `new Window()`, раскрыть, когда первый кадр, отрисованный XAML для видимого окна,
+  закоммичен (`CompositionTarget.Rendered`, затем `Compositor.RequestCommitAsync()`):
+  [WinUiFirstFrameCloak.cs](WinUiFlashLab/WinUiFirstFrameCloak.cs), ни одной вспышки за 50 запусков.
 
 ## Содержимое
 
@@ -34,13 +41,17 @@
 | [`FirstFrameCloak.cs`](FirstFrameCloak.cs) | Исправление; `--no-cloak` отключает его, `--no-activate` открывает окно без активации |
 | [`FlashProbe/`](FlashProbe) | Запись кадров: запускает приложение и измеряет его окно в каждом собранном кадре |
 | [`FlashLab/`](FlashLab) | Окно из репро с переключаемыми вариантами запуска («режимами») |
+| [`WinUiFlashLab/`](WinUiFlashLab) | То же окно в WinUI 3 со своими режимами и исправление для WinUI [`WinUiFirstFrameCloak.cs`](WinUiFlashLab/WinUiFirstFrameCloak.cs) |
 | [`Run-Experiments.ps1`](Run-Experiments.ps1) | Собирает всё и многократно прогоняет набор режимов |
 | [`results/final-fix/`](results/final-fix) | Серия, проверяющая исправление: по запускам, по режимам и описание машины |
+| [`results/wpf-light-system/`](results/wpf-light-system), [`results/wpf-light-software/`](results/wpf-light-software) | Проверка исправления со светлой темой Windows и ещё 20 запусков с программным рендерингом |
 | [`results/reference-run/`](results/reference-run) | Все варианты рядом; записано до того, как исправление стало ждать present |
 | [`results/exploratory-runs.csv`](results/exploratory-runs.csv) | 287 запусков, записанных в ходе исследования, до контрольной серии (их `minimal` — первая версия исправления: скрытие в `SourceInitialized`, раскрытие в `ContentRendered`) |
+| [`results/winui-fix/`](results/winui-fix), `results/winui-*/` | WinUI 3: серия, проверяющая исправление, и серии до неё (см. [WinUI 3](#winui-3)) |
 | [`results/frames/`](results/frames) | Несколько записанных кадров |
 
-Для сборки нужен только .NET 10 SDK.
+Для сборки нужен только .NET 10 SDK; `WinUiFlashLab` дополнительно скачивает `Microsoft.WindowsAppSDK` 2.5.1
+с nuget.org и работает на установленном Windows App Runtime 2.5.
 
 ## Как запустить репро
 
@@ -135,6 +146,8 @@ Rec. 709, 0–255) клиентской области и заголовка о�
 
 - **Кадр вспышки:** клиентская область более чем на 8 ярче и того, что за окном, и готового окна. Пока
   окно проявляется, оно — смесь этих двух; всё, что ярче, может дать только светлая поверхность.
+- **Тёмный кадр вспышки** (добавлен для WinUI): клиентская область более чем на 8 темнее и того, что за
+  окном, и готового окна.
 - **Показано:** первый кадр, который отличается от того, что за окном. **Не показано:** окно не появилось
   за 1,5 с записи.
 - **Закрыто:** поверх центра окна лежит другое окно. Такие кадры показывают то окно, поэтому они
@@ -162,6 +175,28 @@ Rec. 709, 0–255) клиентской области и заголовка о�
 | `cloak=complete+onactivate+heavy` | Исправление, тяжёлый первый кадр | 10 | 0 | 0 | 956 мс | 64 |
 
 Записано с проверкой FlashProbe на закрытые окна; закрытых запусков не было.
+
+### Светлая тема Windows: [results/wpf-light-system](results/wpf-light-system), по 6 запусков на режим
+
+Те же режимы со светлой темой Windows и приложений (сам репро остаётся тёмным):
+
+| Режим | Что | Запусков | Со вспышкой | Не показано | Показано через (медиана) | Самый яркий кадр |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `minimal+no-cloak` | Репро без исправления | 6 | 5 | 0 | 33 мс | 147 |
+| `minimal` | Репро с `FirstFrameCloak` | 6 | 0 | 0 | 99 мс | 64 |
+| `minimal+no-activate` | Репро без активации, с `FirstFrameCloak` | 6 | 0 | 0 | 29 мс | 64 |
+| `software+cloak=complete+onactivate` | Исправление, программный рендеринг | 6 | 1 | 0 | 108 мс | 255 |
+| `mica+cloak=complete+onactivate` | Исправление, фон Mica включён | 6 | 0 | 0 | 107 мс | 64 |
+| `cloak=complete+onactivate+heavy` | Исправление, тяжёлый первый кадр | 6 | 0 | 0 | 949 мс | 64 |
+
+Светлая тема ничего не меняет: незакрашенная поверхность белая в любом случае. Один запуск с программным
+рендерингом показал около 30 мс белого сразу после раскрытия. В этом запуске `MediaContext.CompleteRender`
+вернулся через 72 мс после `ContentRendered` (во всех остальных — не дольше 1 мс), а в остальном
+последовательность событий была такой же. Ещё 20 запусков этого режима
+([results/wpf-light-software](results/wpf-light-software)) не вспыхнули, так что с программным рендерингом
+белое показал 1 из 36 запусков с исправлением; причина неизвестна. В
+[серии WinUI 3 со светлой темой](#светлая-тема) тоже есть репро на светлой теме: 6 из 6 без исправления,
+0 из 6 с ним.
 
 ### Все варианты: [results/reference-run](results/reference-run), по 6 запусков на режим
 
@@ -251,6 +286,21 @@ Rec. 709, 0–255) клиентской области и заголовка о�
 запуски отдельно. Исследовательские запуски записаны до этой проверки; «не показанные» среди них — это
 строки с пустым `shown_ms` в [`results/exploratory-runs.csv`](results/exploratory-runs.csv).
 
+## Другой эффект: тень в левом верхнем углу
+
+Примерно в 1 из 5 запусков через 20–80 мс после показа окна на 35–90 мс появляется контур тени размером с
+окно, без содержимого, левым верхним углом в начале координат экрана (0,0), — хотя само окно уже на своём
+месте. Это не часть вспышки, и вызывают его не тесты:
+
+- его видно глазом в 5 из 30 запусков вообще без записи (без FlashProbe, подложки и Desktop Duplication), а в
+  записях — в 13 из 64 запусков (меняются только края этой области, снизу мягкий градиент: это тень);
+- он бывает у WPF и у WinUI, с исправлением и без (даже пока окно скрыто), и с выключенной анимацией
+  открытия;
+- никакого окна там нет: журнал `SetWinEventHook` показывает, что окно создаётся скрытым в позиции по
+  умолчанию, переносится в середину экрана и показывается там, и больше ничего не показывается.
+
+Тень лежит вне измеряемой области окна, поэтому на числа не влияет; причина (в DWM) неизвестна.
+
 ## Ограничения
 
 - Ожидание present опирается на внутренний метод WPF. Без него (если будущая версия WPF его уберёт)
@@ -258,9 +308,211 @@ Rec. 709, 0–255) клиентской области и заголовка о�
   с пометкой «ранний» выше.
 - Окно появляется, только когда его первый кадр уже на экране: с тяжёлым первым кадром (`heavy`, около
   0,9 с) оно появляется настолько же позже — зато тёмным, а не белым.
+- С программным рендерингом 1 из 36 запусков с исправлением показал около 30 мс белого сразу после раскрытия
+  (см. [Светлая тема Windows](#светлая-тема-windows-resultswpf-light-system-по-6-запусков-на-режим)).
 - Одна машина (см. выше). Тайминги зависят от видеокарты, драйвера, частоты обновления и нагрузки; от них
   же зависит, успеет ли окно без активации раньше DWM.
 - Активированное окно теряет анимацию открытия Windows 11.
+
+## WinUI 3
+
+Те же измерения для окна WinUI 3: [`WinUiFlashLab`](WinUiFlashLab) — неупакованное приложение на Windows App
+SDK 2.5.1, которое выглядит как репро (`RequestedTheme="Dark"`, сетка `#202020` с надписью «Dark window»,
+720×440 DIP посреди основного монитора, тёмный заголовок через `DWMWA_USE_IMMERSIVE_DARK_MODE`). Та же
+машина, та же серая подложка; здесь FlashProbe считает ещё и *тёмные* кадры вспышки (см.
+[Как измерялось](#как-измерялось)).
+
+**Коротко.** До первого кадра окно WinUI 3 показывает чёрную клиентскую область, с активацией или без:
+анимация открытия проявляет её примерно с 40 мс после показа, а содержимое заменяет её примерно на 130 мс.
+Если скрыть окно до показа и раскрыть, когда его первый кадр закоммичен, чёрного не видно; нужны только
+публичные API.
+
+| Без исправления, через 110 мс после того, как окно стало видимым | Анимация открытия выключена, 31 мс | С исправлением: первый кадр, который показал DWM, 130 мс |
+| --- | --- | --- |
+| ![](results/frames/winui-without-fix-110ms.png) | ![](results/frames/winui-animation-off-31ms.png) | ![](results/frames/winui-with-fix-130ms.png) |
+
+### Что происходит при запуске
+
+Типичный запуск (`winui` и `winui+noactivate` в [results/winui-baseline](results/winui-baseline);
+миллисекунды после того, как окно стало `WS_VISIBLE`):
+
+| мс | Активированное окно (`Window.Activate()`) | Окно, открытое без активации (`AppWindow.Show(false)`) |
+| ---: | --- | --- |
+| −25 | `new MainWindow()` создал HWND и содержимое XAML | то же |
+| 0 | Окно становится видимым | то же |
+| ~5 | `WM_NCACTIVATE` / `WM_ACTIVATE`; `Activate()` возвращается примерно через 20 мс | — ; `Show(false)` возвращается примерно через 10 мс |
+| 40–80 | DWM начинает рисовать окно: тёмный заголовок и чёрная клиентская область, проявляясь | то же |
+| 85–90 | Первая компоновка (`Loaded`) и первый тик `CompositionTarget.Rendering` | то же |
+| 95–105 | Первый кадр отрисован (`CompositionTarget.Rendered`) | то же |
+| 130–150 | Первый кадр на экране; содержимое заменяет чёрную поверхность (к этому моменту luma 2–4) | то же |
+
+В отличие от WPF, первый кадр задерживает не активация: первая компоновка приходит через 85–90 мс после
+показа в обоих случаях, поэтому окно без активации тоже вспыхивает. С выключенной анимацией открытия
+(`nofade`) клиентская область сразу после показа 1–3 кадра чисто белая, а затем чисто чёрная до первого
+кадра.
+
+### Исправление
+
+[`WinUiFirstFrameCloak.cs`](WinUiFlashLab/WinUiFirstFrameCloak.cs); подключается после создания окна, до
+показа:
+
+```csharp
+var window = new MainWindow();
+WinUiFirstFrameCloak.Attach(window);    // HWND уже есть: скрыть окно до первого показа
+window.Activate();
+```
+
+```csharp
+// Attach: DwmSetWindowAttribute(hwnd, DWMWA_CLOAK = 13, TRUE), затем ждать Loaded у содержимого.
+
+// Каждый CompositionTarget.Rendered после Loaded:
+if (!IsWindowVisible(hwnd)) return;     // кадр, отрисованный до показа, не считается
+CompositionTarget.Rendered -= OnRendered;
+await window.Compositor.RequestCommitAsync();
+SetCloaked(hwnd, false);
+```
+
+- **Зачем ждать коммита?** `CompositionTarget.Rendered` приходит, когда XAML отрисовал кадр в UI-потоке; на
+  экран кадр попадает через 35–40 мс. Раскрытие в `Loaded`, на первом тике `Rendering` или в самом
+  `Rendered` показывало чёрную поверхность в каждом запуске (54 из 54: с активацией, со скрытием при
+  активации и без активации). После `Compositor.RequestCommitAsync()` — ни разу; `DwmFlush` сверху ничего не
+  менял.
+- **Почему скрывать до показа, и любое окно?** Окно WinUI вспыхивает и с активацией, и без неё, поэтому
+  правило из WPF (скрывать при активации, окна без активации не трогать) здесь не подходит. Скрытие при
+  активации тоже работает (`cloak=commit+onactivate`, 0 из 12), но ничего не даёт. Скрытие окна, которое
+  открывается без активации, здесь не вредило, потому что раскрытие ждёт закоммиченного кадра.
+- **Почему только кадр видимого окна?** Когда показ отложен (см. ниже), XAML рисует первый кадр до того, как
+  окно станет видимым. Первая версия хелпера раскрывала окно сразу и показала белый кадр в 1 из 6 запусков
+  (`winui+fix+post` в [results/winui-candidates](results/winui-candidates)): окно, которое скрыли и раскрыли,
+  теряет анимацию открытия, а именно она прячет белую поверхность, которую DWM показывает несколько кадров
+  сразу после показа (её видно в `post+nofade`, хотя содержимое уже было отрисовано). XAML рисует снова через
+  5–30 мс после показа (в каждом запуске с отложенным показом, с активацией или без); хелпер ждёт этого кадра.
+- **Быстрее: отложить показ.** Если показывать окно из `window.DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, ...)`
+  (обходной путь из [microsoft-ui-xaml#7892](https://github.com/microsoft/microsoft-ui-xaml/issues/7892)),
+  XAML успевает выполнить компоновку и отрисовку до того, как окно станет видимым. С хелпером окно тогда
+  появляется примерно через 50 мс вместо 130–140 мс и по-прежнему без вспышки (0 из 42, в том числе с тяжёлым
+  первым кадром). Одно лишь откладывание работает для простого окна (0 из 22), но не при тяжёлом первом кадре
+  (`post+heavy`: 3 из 6 тёмных, 1 светлая).
+
+### Результаты: [results/winui-fix](results/winui-fix), по 10 запусков на режим
+
+| Режим | Что | Запусков | Светлая вспышка | Тёмная вспышка | Не показано | Показано через (медиана) | Самый яркий | Самый тёмный |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `winui` | Без исправления | 10 | 0 | 9 | 0 | 40 мс | 65 | 2 |
+| `winui+fix` | **`WinUiFirstFrameCloak`** | 10 | 0 | 0 | 0 | 140 мс | 64 | 33 |
+| `winui+fix+noactivate` | **Исправление, окно открыто без активации** | 10 | 0 | 0 | 0 | 131 мс | 64 | 33 |
+| `winui+fix+mica` | Исправление, фон Mica | 10 | 0 | 0 | 0 | 119 мс | 64 | 32 |
+| `winui+fix+heavy` | Исправление, тяжёлый первый кадр | 10 | 0 | 0 | 0 | 583 мс | 64 | 37 |
+| `winui+fix+post` | **Исправление с отложенным показом** | 10 | 0 | 0 | 0 | 53 мс | 64 | 33 |
+| `winui+post` | Только отложенный показ | 10 | 0 | 0 | 0 | 49 мс | 64 | 33 |
+
+Ни один запуск не был закрыт другим окном. За окном серая подложка (luma 64), готовое окно имеет luma 33
+(37 с `heavy`): самый тёмный кадр 33 значит, что ничего темнее самого окна на экране не было, 0 — чисто
+чёрный. Без исправления «показано» — это момент, когда начинает проявляться чёрная поверхность; содержимое
+появляется примерно на 130 мс, как и с исправлением.
+
+### Все варианты, по 6 запусков на режим (по 8 в `winui-fix-post`)
+
+| Режим | Что | Серия | Запусков | Светлая вспышка | Тёмная вспышка | Показано через (медиана) | Самый яркий | Самый тёмный |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `winui` | Без исправления | baseline | 6 | 0 | 6 | 60 мс | 64 | 3 |
+| `winui+noactivate` | Открыто без активации | baseline | 6 | 0 | 6 | 33 мс | 64 | 0 |
+| `winui+mica` | Фон Mica | baseline | 6 | 1 | 6 | 43 мс | 72 | 2 |
+| `winui+nofade` | Анимация открытия выключена | baseline | 6 | 4 | 6 | 17 мс | 255 | 0 |
+| `winui+heavy` | Тяжёлый первый кадр (примерно на 0,4 с позже) | baseline | 6 | 0 | 6 | 44 мс | 64 | 0 |
+| `winui+layered` | Layered-окно, alpha 0 до первого тика `Rendering` ([#10259](https://github.com/microsoft/microsoft-ui-xaml/issues/10259)) | baseline | 6 | 0 | 6 | 87 мс | 64 | 0 |
+| `winui+post` | Отложенный показ | baseline | 6 | 0 | 0 | 44 мс | 64 | 33 |
+| `winui+post+mica` | Отложенный показ, Mica | baseline | 6 | 0 | 0 | 36 мс | 64 | 32 |
+| `winui+post+heavy` | Отложенный показ, тяжёлый первый кадр | baseline | 6 | 1 | 3 | 38 мс | 96 | 9 |
+| `winui+cloak=loaded` | Скрыть, раскрыть в `Loaded` | cloak | 6 | 0 | 6 | 87 мс | 64 | 0 |
+| `winui+cloak=rendering` | Скрыть, раскрыть на первом тике `Rendering` | cloak | 6 | 0 | 6 | 97 мс | 64 | 0 |
+| `winui+cloak=rendered` | Скрыть, раскрыть на первом `Rendered` | cloak | 6 | 0 | 6 | 96 мс | 64 | 0 |
+| `winui+cloak=commit` | Скрыть, раскрыть после первого `Rendered` и `RequestCommitAsync` | cloak | 6 | 0 | 0 | 138 мс | 64 | 33 |
+| `winui+cloak=commitflush` | То же, затем `DwmFlush` | cloak | 6 | 0 | 0 | 142 мс | 33 | 33 |
+| `winui+cloak=late` | Скрыть, раскрыть через 300 мс после `Loaded` | cloak | 6 | 0 | 0 | 405 мс | 64 | 33 |
+| `winui+cloak=loaded+onactivate` | Скрыть при активации, раскрыть в `Loaded` | cloak | 6 | 0 | 6 | 92 мс | 64 | 0 |
+| `winui+cloak=rendering+onactivate` | Скрыть при активации, раскрыть на первом тике `Rendering` | cloak | 6 | 0 | 6 | 100 мс | 64 | 0 |
+| `winui+cloak=rendered+onactivate` | Скрыть при активации, раскрыть на первом `Rendered` | cloak | 6 | 0 | 6 | 100 мс | 64 | 0 |
+| `winui+cloak=commit+onactivate` | Скрыть при активации, раскрыть после коммита | cloak | 6 | 0 | 0 | 140 мс | 64 | 33 |
+| `winui+cloak=commitflush+onactivate` | То же, затем `DwmFlush` | cloak | 6 | 0 | 0 | 148 мс | 64 | 33 |
+| `winui+cloak=late+onactivate` | Скрыть при активации, раскрыть через 300 мс после `Loaded` | cloak | 6 | 0 | 0 | 395 мс | 64 | 33 |
+| `winui+noactivate+cloak=loaded` | Без активации: раскрыть в `Loaded` | cloak | 6 | 0 | 6 | 95 мс | 64 | 0 |
+| `winui+noactivate+cloak=rendering` | Без активации: раскрыть на первом тике `Rendering` | cloak | 6 | 0 | 6 | 84 мс | 64 | 0 |
+| `winui+noactivate+cloak=rendered` | Без активации: раскрыть на первом `Rendered` | cloak | 6 | 0 | 6 | 99 мс | 64 | 0 |
+| `winui+noactivate+cloak=commit` | Без активации: раскрыть после коммита | cloak | 6 | 0 | 0 | 135 мс | 64 | 33 |
+| `winui+noactivate+cloak=commitflush` | Без активации: то же, затем `DwmFlush` | cloak | 6 | 0 | 0 | 145 мс | 64 | 33 |
+| `winui+noactivate+cloak=late` | Без активации: раскрыть через 300 мс после `Loaded` | cloak | 6 | 0 | 0 | 398 мс | 64 | 33 |
+| `winui+cloak=commit+heavy` | Коммит, тяжёлый первый кадр | candidates | 6 | 0 | 0 | 566 мс | 37 | 37 |
+| `winui+noactivate+cloak=commit+heavy` | То же, без активации | candidates | 6 | 0 | 0 | 570 мс | 64 | 37 |
+| `winui+cloak=commitflush+heavy` | Коммит и `DwmFlush`, тяжёлый первый кадр | candidates | 6 | 0 | 0 | 578 мс | 37 | 37 |
+| `winui+cloak=commit+mica` | Коммит, Mica | candidates | 6 | 0 | 0 | 127 мс | 64 | 32 |
+| `winui+cloak=commit+nofade` | Коммит, анимация открытия выключена | candidates | 6 | 0 | 0 | 137 мс | 64 | 33 |
+| `winui+fix+post` | Первая версия хелпера (раскрывает по кадру, отрисованному до показа), отложенный показ | candidates | 6 | 1 | 0 | 47 мс | 255 | 33 |
+| `winui+fix+post` | Исправление, отложенный показ | fix-post | 8 | 0 | 0 | 48 мс | 64 | 33 |
+| `winui+fix+post+noactivate` | То же, без активации | fix-post | 8 | 0 | 0 | 41 мс | 64 | 33 |
+| `winui+fix+post+nofade` | То же, анимация открытия выключена | fix-post | 8 | 0 | 0 | 61 мс | 64 | 33 |
+| `winui+fix+post+heavy` | То же, тяжёлый первый кадр | fix-post | 8 | 0 | 0 | 87 мс | 64 | 37 |
+
+Серии: `results/winui-baseline`, `results/winui-cloak`, `results/winui-candidates` и
+`results/winui-fix-post`. В `winui-candidates` есть также `winui+fix` с первой версией хелпера в остальных
+вариантах (обычный, `noactivate`, `mica`, `heavy`, `nofade`: ни одной вспышки за 30 запусков). В
+`winui-cloak` 17 запусков с `onactivate` помечены как закрытые: по одному кадру примерно через 17 мс после
+показа, в котором окно только что скрыли. Это была гонка в FlashProbe (`WindowFromPoint` пропускает скрытое
+окно), исправленная позже; строки выше учитывают эти запуски, `aggregate.csv` серии их исключает.
+
+### Светлая тема
+
+Цвет поверхности следует теме приложения, а не теме Windows: чёрная у тёмного приложения, белая у светлого
+(`RequestedTheme="Light"`, окно `#F3F3F3` с надписью «Light window», luma 242). Белое, проявляющееся на
+светлом окне, заметить трудно; с выключенной анимацией открытия оно видно в полную силу около 90 мс.
+Исправление убирает и то, и другое. [results/winui-light-app](results/winui-light-app) записана с тёмной темой
+Windows, [results/winui-light-system](results/winui-light-system) — со светлой (Windows и приложения светлые);
+по 6 запусков на режим:
+
+| Режим | Что | Тема Windows | Светлая вспышка | Тёмная вспышка | Показано через (медиана) | Самый яркий | Самый тёмный |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `winui+light` | Светлое приложение, без исправления | тёмная | 1 | 0 | 47 мс | 255 | 64 |
+| `winui+light+noactivate` | То же, без активации | тёмная | 1 | 0 | 38 мс | 255 | 64 |
+| `winui+light+nofade` | То же, анимация открытия выключена | тёмная | 6 | 0 | 23 мс | 255 | 64 |
+| `winui+light+fix` | Светлое приложение, исправление | тёмная | 0 | 0 | 140 мс | 242 | 64 |
+| `winui+light+fix+noactivate` | То же, без активации | тёмная | 0 | 0 | 126 мс | 242 | 64 |
+| `winui+light+fix+post` | То же, отложенный показ | тёмная | 0 | 0 | 65 мс | 242 | 64 |
+| `winui` | Тёмное приложение, без исправления | светлая | 0 | 6 | 40 мс | 67 | 0 |
+| `winui+noactivate` | То же, без активации | светлая | 0 | 6 | 30 мс | 64 | 2 |
+| `winui+nofade` | То же, анимация открытия выключена | светлая | 5 | 6 | 19 мс | 255 | 0 |
+| `winui+fix` | Тёмное приложение, исправление | светлая | 0 | 0 | 136 мс | 64 | 33 |
+| `winui+fix+noactivate` | То же, без активации | светлая | 0 | 0 | 131 мс | 64 | 33 |
+| `winui+light` | Светлое приложение, без исправления | светлая | 1 | 0 | 38 мс | 252 | 64 |
+| `winui+light+nofade` | То же, анимация открытия выключена | светлая | 6 | 0 | 20 мс | 255 | 64 |
+| `winui+light+fix` | Светлое приложение, исправление | светлая | 0 | 0 | 133 мс | 242 | 64 |
+| `winui+systheme` | Приложение следует теме Windows (светлой), без исправления | светлая | 0 | 0 | 45 мс | 249 | 64 |
+| `winui+systheme+fix` | То же, исправление | светлая | 0 | 0 | 124 мс | 242 | 64 |
+| `minimal+no-cloak` | Репро WPF, без исправления | светлая | 6 | 0 | 32 мс | 209 | 33 |
+| `minimal` | Репро WPF с `FirstFrameCloak` | светлая | 0 | 0 | 103 мс | 64 | 33 |
+
+Самый тёмный кадр 64 в светлых строках — это подложка: светлое окно ярче неё. Для светлого окна метрика
+считает вспышкой только кадры ярче окна плюс 8 (250), поэтому проявляющаяся белая поверхность засчитывается
+редко, хотя она есть. Репро WPF со светлой темой Windows вспыхивает так же, как с тёмной.
+
+### Что не работает в WinUI 3
+
+- **Раскрытие до коммита**: в `Loaded`, на первом тике `Rendering` или на первом `Rendered`.
+- **Обходной путь с layered-окном** из [microsoft-ui-xaml#10259](https://github.com/microsoft/microsoft-ui-xaml/issues/10259)
+  (alpha 0, обратно 255 на первом тике `Rendering`): тик приходит раньше кадра, 6 из 6 тёмных.
+- **Mica или выключенная анимация открытия**: Mica вспыхивает так же; без анимации белая и чёрная
+  поверхности видны в полную силу.
+- **Одно лишь откладывание показа** помогает, только пока первый кадр дешёвый (см. выше).
+
+### Ограничения (WinUI 3)
+
+- Одна машина и один рантайм: Windows App Runtime 2.5.1; обе темы Windows (см. [Светлая тема](#светлая-тема)).
+- Окно теряет анимацию открытия Windows 11. Содержимое появляется тогда же, когда появилось бы без
+  исправления (примерно через 130 мс после показа); пропадает только чёрное вступление. С отложенным показом
+  окно появляется примерно через 50 мс.
+- Хелпер рассчитывает на то, что XAML рисует снова, когда окно показано; так было в каждом запуске. Окно,
+  которое так и не показали, остаётся скрытым, что безвредно.
+- Только публичные API: `DwmSetWindowAttribute`, `CompositionTarget.Rendered` и
+  `Compositor.RequestCommitAsync`.
 
 ## Как воспроизвести
 
@@ -273,11 +525,19 @@ pwsh ./Run-Experiments.ps1 -Runs 10 -Name my-fix-check -Modes minimal+no-cloak,m
 компьютер. Он печатает строку на каждый запуск и таблицу по режимам и пишет `results/<name>/`
 (`summary.csv`, `aggregate.csv`, `environment.txt`; файлы кадров и событий по запускам в `runs/` в git не
 попадают). Режимы, начинающиеся с `minimal`, запускают репро, и каждый `+flag` превращается в `--flag`
-(`minimal+no-activate+no-cloak`); все остальные режимы запускают FlashLab. Один запуск вручную:
+(`minimal+no-activate+no-cloak`); режимы, начинающиеся с `winui`, запускают WinUiFlashLab с остатком режима
+(`winui` → `baseline`, `winui+fix+post` → `fix+post`); все остальные режимы запускают FlashLab. Один запуск
+вручную:
 
 ```powershell
 FlashProbe/bin/Release/net10.0-windows/FlashProbe.exe FlashLab/bin/Release/net10.0-windows10.0.19041.0/FlashLab.exe `
     --args "cloak=cr" --backdrop --save 300 --verbose --out probe-output
+```
+
+Проверка WinUI:
+
+```powershell
+pwsh ./Run-Experiments.ps1 -Runs 10 -Name my-winui-check -Modes winui,winui+fix,winui+fix+noactivate,winui+fix+mica,winui+fix+heavy,winui+fix+post,winui+post
 ```
 
 `--save <ms>` сохраняет в PNG каждый кадр первых миллисекунд записи; `--snapshot` сохраняет весь экран
@@ -308,6 +568,25 @@ FlashProbe/bin/Release/net10.0-windows/FlashProbe.exe FlashLab/bin/Release/net10
 | `rgn` | Вместе с `cloak=`: скрывать пустым регионом окна (`SetWindowRgn`) вместо `DWMWA_CLOAK` |
 | `inval`, `rm`, `framechanged` | После раскрытия: `InvalidateRect`; переключить `HwndTarget.RenderMode` на программный рендеринг и обратно; `SWP_FRAMECHANGED` |
 
+### Режимы WinUiFlashLab
+
+Флаги соединяются через `+`, как в FlashLab; без флагов (`baseline`) окно показывается через
+`Window.Activate()`.
+
+| Флаг | Действие |
+| --- | --- |
+| `noactivate` | `AppWindow.Show(false)`: окно открывается без активации |
+| `post` | Показать окно из `DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, ...)` |
+| `mica` | `MicaBackdrop`, фон сетки убран |
+| `nofade` | `DWMWA_TRANSITIONS_FORCEDISABLED`: без анимации открытия |
+| `heavy` | 6000 элементов `Ellipse` с обводкой: первый кадр приходит примерно на 0,4 с позже |
+| `layered` | `WS_EX_LAYERED` с alpha 0 до первого тика `CompositionTarget.Rendering` |
+| `cloak=<when>` | `DWMWA_CLOAK` сразу после `new MainWindow()`, раскрыть в момент `<when>`: `loaded` (`Loaded` корня); `rendering` (первый тик `Rendering`); `rendered` (первый `Rendered`); `commit` (первый `Rendered`, затем `Compositor.RequestCommitAsync`); `commitflush` (то же, затем `DwmFlush`); `late` (через 300 мс после `Loaded`) |
+| `onactivate` | С `cloak=`: скрыть на первом `WM_NCACTIVATE`/`WM_ACTIVATE` |
+| `fix` | `WinUiFirstFrameCloak.Attach` до показа |
+| `light` | `RequestedTheme = Light`: окно `#F3F3F3` с надписью «Light window» и светлым заголовком |
+| `systheme` | Без `RequestedTheme`: приложение следует режиму приложений Windows (окно и заголовок — как для этой темы) |
+
 ## Ссылки
 
 - [dotnet/wpf#5853](https://github.com/dotnet/wpf/issues/5853): «Apps with a custom background flash
@@ -317,6 +596,12 @@ FlashProbe/bin/Release/net10.0-windows/FlashProbe.exe FlashLab/bin/Release/net10
   - `WM_ERASEBKGND` обрабатывается без рисования: [HwndTarget.cs#L1034](https://github.com/dotnet/wpf/blob/2565b0112868a77d29992c86a0c695c9d4d6d7fb/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/InterOp/HwndTarget.cs#L1034)
   - тёмный заголовок и фон окна применяются до `ShowWindow`: [Window.cs#L2578-L2597](https://github.com/dotnet/wpf/blob/2565b0112868a77d29992c86a0c695c9d4d6d7fb/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/Windows/Window.cs#L2578-L2597)
   - `MediaContext.CompleteRender`, «a sync flush, which will only return after the last frame is presented»: [MediaContext.cs#L2206](https://github.com/dotnet/wpf/blob/2565b0112868a77d29992c86a0c695c9d4d6d7fb/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/MediaContext.cs#L2206)
+- WinUI 3: [microsoft-ui-xaml#7892](https://github.com/microsoft/microsoft-ui-xaml/issues/7892) (мерцание
+  окон WinUI 3 при открытии и закрытии; закрыт как устаревший) и
+  [microsoft-ui-xaml#10259](https://github.com/microsoft/microsoft-ui-xaml/issues/10259) (открыт; кадр с фоном
+  окна до того, как XAML нарисован);
+  [`CompositionTarget.Rendered`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.media.compositiontarget.rendered),
+  [`Compositor.RequestCommitAsync`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.composition.compositor.requestcommitasync).
 - [`DWMWA_CLOAK`](https://learn.microsoft.com/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute)
   и [Desktop Duplication](https://learn.microsoft.com/windows/win32/direct3ddxgi/desktop-dup-api)
   на Microsoft Learn.

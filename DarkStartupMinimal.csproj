@@ -11,6 +11,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- The measurement tools and results live in subfolders with their own projects. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);FlashProbe\**;FlashLab\**;results\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);FlashProbe\**;FlashLab\**;WinUiFlashLab\**;results\**</DefaultItemExcludes>
   </PropertyGroup>
 </Project>

@@ -1,0 +1,16 @@
+<Window x:Class="WinUiFlashLab.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WinUI flash lab">
+  <Grid x:Name="Root" x:FieldModifier="internal" Background="#202020">
+    <!-- Only filled in the "heavy" mode: a first frame that is expensive to lay out and render. -->
+    <Canvas x:Name="Heavy" x:FieldModifier="internal" />
+    <TextBlock x:Name="Label"
+               x:FieldModifier="internal"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               FontSize="24"
+               Foreground="White"
+               Text="Dark window" />
+  </Grid>
+</Window>
