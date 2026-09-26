@@ -1,5 +1,7 @@
 # Light flash when a dark WPF window opens
 
+English · [Русский](README.RU.md)
+
 A .NET 10 WPF window in the Fluent dark theme shows a light rectangle for a few frames before its dark
 content appears. This folder holds a minimal repro, a fix, and the measurements behind both: every frame
 DWM composed during 521 window starts, recorded with DXGI Desktop Duplication.
@@ -124,9 +126,9 @@ off (`DWMWA_TRANSITIONS_FORCEDISABLED`) the client area is pure white (luma 255)
 
 [`FlashProbe`](FlashProbe) starts the app and takes every frame DWM composes
 (`IDXGIOutputDuplication::AcquireNextFrame` on each monitor), measuring the average brightness (Rec. 709
-luma, 0–255) of the window's client area and title bar at the window's position. The last frame before the window became visible tells
-what is behind it; with `--backdrop` that is a plain grey window (luma 64), so the numbers do not depend on
-the desktop.
+luma, 0–255) of the window's client area and title bar at the window's position. The last frame before the
+window became visible tells what is behind it; with `--backdrop` that is a plain grey window (luma 64), so
+the numbers do not depend on the desktop.
 
 - **Flash frame:** the client area is more than 8 brighter than both what is behind the window and the
   finished window. While the window fades in, it is a blend of those two; anything brighter can only come
