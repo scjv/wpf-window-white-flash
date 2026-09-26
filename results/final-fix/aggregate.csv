@@ -1,0 +1,7 @@
+"mode","runs","covered_runs","flash_runs","never_shown","median_shown_ms","max_peak","behind"
+"minimal+no-cloak","10","0","10","0","39.5","143","64"
+"minimal","10","0","0","0","118","64","64"
+"minimal+no-activate","10","0","0","0","36","64","64"
+"software+cloak=complete+onactivate","10","0","0","0","111","64","64"
+"mica+cloak=complete+onactivate","10","0","0","0","120","64","64"
+"cloak=complete+onactivate+heavy","10","0","0","0","956","64","64"

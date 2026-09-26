@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+*.user
+
+# Per-run frame and event files written by Run-Experiments.ps1; the summaries next to them are kept.
+results/*/runs/
+
+# Output folder of the single-start example in README.md.
+probe-output/

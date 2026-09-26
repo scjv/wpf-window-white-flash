@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- Match the production app: Fluent controls without the native Mica backdrop. -->
+    <RuntimeHostConfigurationOption Include="Switch.System.Windows.Appearance.DisableFluentThemeWindowBackdrop" Value="true" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The measurement tools and results live in subfolders with their own projects. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);FlashProbe\**;FlashLab\**;results\**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>
