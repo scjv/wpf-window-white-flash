@@ -8,7 +8,8 @@
     modes are interleaved, so a slow drift of the machine state (GPU clocks, background load) affects all
     of them alike. FlashProbe records every frame DWM composes and appends one line per start to
     results/<Name>/summary.csv; per-run frame and event files go to results/<Name>/runs. The per-mode table
-    is printed and written to results/<Name>/aggregate.csv, the machine description to environment.txt.
+    is printed and written to results/<Name>/aggregate.csv, the machine description to environment.txt. A
+    -Name whose folder already has a summary.csv is refused; a mode listed twice runs once.
 
     Modes are FlashLab modes ("baseline", "cloak=cr", "software+cloak=cr", ...; see README.md). Modes that
     start with "minimal" run the minimal repro itself; each "+flag" becomes "--flag", so
@@ -44,10 +45,13 @@ param(
 $ErrorActionPreference = 'Stop'
 [System.Threading.Thread]::CurrentThread.CurrentCulture = [cultureinfo]::InvariantCulture
 # "pwsh -File" passes "-Modes a,b" as one string.
-$Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim(" '`"") } | Where-Object { $_ })
+# A mode listed twice would run twice per round under the same label and be counted twice.
+$Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim(" '`"") } | Where-Object { $_ } | Select-Object -Unique)
 $root = $PSScriptRoot
 $out = Join-Path $root "results/$Name"
 $runsDir = Join-Path $out 'runs'
+# FlashProbe appends to summary.csv, so a second run into the same folder would mix with the first one.
+if (Test-Path (Join-Path $out 'summary.csv')) { throw "results/$Name already has a summary.csv; pick another -Name." }
 New-Item -ItemType Directory -Force -Path $runsDir | Out-Null
 
 $projects = @('FlashProbe/FlashProbe.csproj', 'FlashLab/FlashLab.csproj', 'DarkStartupMinimal.csproj')

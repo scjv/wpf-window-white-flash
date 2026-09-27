@@ -521,9 +521,10 @@ pwsh ./Run-Experiments.ps1 -Runs 10 -Name my-fix-check -Modes minimal+no-cloak,m
 Windows open in the middle of the primary monitor over a grey backdrop; leave the machine alone while the
 script runs. It prints one line per start and a table per mode, and writes `results/<name>/`
 (`summary.csv`, `aggregate.csv`, `environment.txt`; the per-start frame and event files in `runs/` are not
-committed). Modes starting with `minimal` run the repro, each `+flag` becoming `--flag`
-(`minimal+no-activate+no-cloak`); modes starting with `winui` run WinUiFlashLab with the rest of the mode
-(`winui` → `baseline`, `winui+fix+post` → `fix+post`); all other modes run FlashLab. A single start by hand:
+committed; a name that already has a `summary.csv` is refused). Modes starting with `minimal` run the repro,
+each `+flag` becoming `--flag` (`minimal+no-activate+no-cloak`); modes starting with `winui` run WinUiFlashLab
+with the rest of the mode (`winui` → `baseline`, `winui+fix+post` → `fix+post`); all other modes run FlashLab.
+A mode listed twice runs once. A single start by hand:
 
 ```powershell
 FlashProbe/bin/Release/net10.0-windows/FlashProbe.exe FlashLab/bin/Release/net10.0-windows10.0.19041.0/FlashLab.exe `
