@@ -524,10 +524,11 @@ pwsh ./Run-Experiments.ps1 -Runs 10 -Name my-fix-check -Modes minimal+no-cloak,m
 Окна открываются посреди основного монитора поверх серой подложки; пока скрипт работает, не трогайте
 компьютер. Он печатает строку на каждый запуск и таблицу по режимам и пишет `results/<name>/`
 (`summary.csv`, `aggregate.csv`, `environment.txt`; файлы кадров и событий по запускам в `runs/` в git не
-попадают). Режимы, начинающиеся с `minimal`, запускают репро, и каждый `+flag` превращается в `--flag`
-(`minimal+no-activate+no-cloak`); режимы, начинающиеся с `winui`, запускают WinUiFlashLab с остатком режима
-(`winui` → `baseline`, `winui+fix+post` → `fix+post`); все остальные режимы запускают FlashLab. Один запуск
-вручную:
+попадают; имя, для которого `summary.csv` уже есть, скрипт не принимает). Режимы, начинающиеся с `minimal`,
+запускают репро, и каждый `+flag` превращается в `--flag` (`minimal+no-activate+no-cloak`); режимы,
+начинающиеся с `winui`, запускают WinUiFlashLab с остатком режима (`winui` → `baseline`, `winui+fix+post` →
+`fix+post`); все остальные режимы запускают FlashLab. Режим, указанный дважды, запускается один раз. Один
+запуск вручную:
 
 ```powershell
 FlashProbe/bin/Release/net10.0-windows/FlashProbe.exe FlashLab/bin/Release/net10.0-windows10.0.19041.0/FlashLab.exe `
