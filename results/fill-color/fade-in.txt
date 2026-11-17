@@ -1,0 +1,7 @@
+baseline                                 runs=10 behind= 64 final= 32 settle_ms median=  50 [0..66] steps median= 8 [0..11] low=32 high=245
+minimal                                  runs=10 behind= 64 final= 32 settle_ms median=   0 [0..0] steps median= 0 [0..0] low=32 high=64
+fill=010000                              runs=10 behind= 64 final= 32 settle_ms median=  48 [34..59] steps median= 8 [6..10] low=2 high=64
+fill=202020                              runs=10 behind= 64 final= 32 settle_ms median=  54 [0..64] steps median= 9 [0..10] low=32 high=64
+fill=202020+cloak=complete+onactivate    runs=10 behind= 64 final= 32 settle_ms median=   0 [0..0] steps median= 0 [0..0] low=32 high=64
+software+fill=202020                     runs=10 behind= 64 final= 32 settle_ms median=  22 [14..62] steps median= 3 [2..10] low=32 high=64
+heavy+fill=202020                        runs=10 behind= 64 final= 48 settle_ms median= 901 [890..912] steps median=119 [117..120] low=32 high=64

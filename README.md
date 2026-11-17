@@ -4,7 +4,7 @@ English · [Русский](README.RU.md)
 
 A .NET 10 WPF window in the Fluent dark theme shows a light rectangle for a few frames before its dark
 content appears. This folder holds a minimal repro, a fix, and the measurements behind both: every frame
-DWM composed during 589 window starts, recorded with DXGI Desktop Duplication. The same tools found a
+DWM composed during 659 window starts, recorded with DXGI Desktop Duplication. The same tools found a
 similar, dark flash in WinUI 3 and a fix for it: see [WinUI 3](#winui-3) (444 more starts).
 
 **In short**
@@ -22,6 +22,9 @@ similar, dark flash in WinUI 3 and a fix for it: see [WinUI 3](#winui-3) (444 mo
   a window that opens without activation alone: [FirstFrameCloak.cs](FirstFrameCloak.cs). No flash in 50
   starts with the fix (activated or not, software rendering, Mica, an expensive first frame), against a flash
   in 10 of 10 starts without it.
+- **Windows 11 24H2 and later:** set the colour DWM fills the unpainted surface with to the window background
+  (undocumented `WCA_REDIRECTIONBITMAP_FILL_COLOR`). No flash in 10 starts, and unlike the cloak the window
+  keeps the open animation: see [the fill colour](#windows-11-24h2-the-fill-colour-of-the-unpainted-surface).
 - **Not earlier.** Uncloaking in `Loaded`, on `WM_ERASEBKGND` or on the first `CompositionTarget.Rendering`
   tick shows the white surface, and so does cloaking a window that opens without activation. Uncloaking in
   `ContentRendered` without waiting for the present is almost enough; it failed once in 6 starts on a busy
@@ -44,6 +47,7 @@ similar, dark flash in WinUI 3 and a fix for it: see [WinUI 3](#winui-3) (444 mo
 | [`Run-Experiments.ps1`](Run-Experiments.ps1) | Builds everything and runs a set of modes repeatedly |
 | [`results/final-fix/`](results/final-fix) | The run that checks the fix: per start, per mode, and the machine |
 | [`results/wpf-light-system/`](results/wpf-light-system), [`results/wpf-light-software/`](results/wpf-light-software) | The fix check on the light Windows theme, and 20 more starts with software rendering |
+| [`results/fill-color/`](results/fill-color) | The fill colour of the unpainted surface (Windows 11 24H2), against no fix and the cloak |
 | [`results/reference-run/`](results/reference-run) | All variants side by side, recorded before the fix waited for the present |
 | [`results/exploratory-runs.csv`](results/exploratory-runs.csv) | The 287 starts recorded while investigating, before the reference run (their `minimal` is the first version of the fix: cloak in `SourceInitialized`, uncloak in `ContentRendered`) |
 | [`results/winui-fix/`](results/winui-fix), `results/winui-*/` | WinUI 3: the run that checks the fix, and the runs before it (see [WinUI 3](#winui-3)) |
@@ -310,7 +314,63 @@ It lies outside the measured window area, so it does not affect the numbers; the
   (see [Light Windows theme](#light-windows-theme-resultswpf-light-system-6-starts-per-mode)).
 - One machine (see above). The timings depend on GPU, driver, refresh rate and load; so does whether a window
   opened without activation beats DWM.
-- An activated window loses the Windows 11 open animation.
+- An activated window loses the Windows 11 open animation. On Windows 11 24H2 and later the
+  [fill colour](#windows-11-24h2-the-fill-colour-of-the-unpainted-surface) avoids that.
+
+## Windows 11 24H2: the fill colour of the unpainted surface
+
+In [dotnet/wpf#5853](https://github.com/dotnet/wpf/issues/5853) dmex pointed to an attribute that Windows 11
+24H2 added: the colour DWM fills a window's redirection bitmap with until the window has painted, the white
+surface above. It is set through the undocumented `SetWindowCompositionAttribute` with
+`WCA_REDIRECTIONBITMAP_FILL_COLOR` (0x23), before the window is shown:
+
+```csharp
+// SourceInitialized. COLORREF 0x00BBGGRR with 0xFF in the high byte; a stored 0 resets the attribute,
+// so black has to be 0x000001 (RGB 1, 0, 0).
+int value = unchecked((int)0xFF000000) | 0x202020;
+var data = new WindowCompositionAttributeData { Attribute = 0x23, Data = &value, Size = sizeof(int) };
+SetWindowCompositionAttribute(hwnd, ref data);   // user32, fails before 24H2
+```
+
+FlashLab's `fill=RRGGBB` flag does this. The window is not cloaked, so it opens with the Windows 11 open
+animation, fading in from the fill colour, and its content replaces the fill when the first frame is
+presented, as without any fix. dmex's sample fills near-black (`010000`); the window background is `#202020`.
+
+### Results: [results/fill-color](results/fill-color), 10 starts per mode
+
+Recorded on Windows 11 Home 10.0.26300 ([environment.txt](results/fill-color/environment.txt)), the same
+machine as above; the attribute was accepted in every start, and no start was covered.
+
+| Mode | What | Starts | Light flash | Dark flash | Shown after (median) | Brightest | Darkest | Fade-in (median) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `baseline` | No fix | 10 | 9 | 0 | 25 ms | 245 | 33 | 8 frames, 50 ms |
+| `minimal` | `FirstFrameCloak` | 10 | 0 | 0 | 104 ms | 64 | 33 | none: 1 step |
+| `fill=010000` | Near-black fill, as in dmex's sample | 10 | 0 | **8** | 26 ms | 64 | **2** | 8 frames, 48 ms |
+| `fill=202020` | **Fill with the window background** | 10 | **0** | **0** | **23 ms** | 64 | 32 | **9 frames, 54 ms** |
+| `fill=202020+cloak=complete+onactivate` | Fill and the cloak | 10 | 0 | 0 | 100 ms | 64 | 33 | none: 1 step |
+| `software+fill=202020` | Fill, software rendering | 10 | 0 | 0 | 29 ms | 64 | 33 | 3 frames, 22 ms |
+| `heavy+fill=202020` | Fill, expensive first frame | 10 | 0 | (10) | 26 ms | 64 | 32 | 119 frames, 901 ms |
+
+*Fade-in* is the time from the first frame that differs from the backdrop until the client area stays within
+1.5 of its final brightness, and the number of frames in between ([fade-in.txt](results/fill-color/fade-in.txt),
+computed from the per-run frame files, which are not kept). It shows the open animation by brightness only,
+not its scale.
+
+- **The fill colour must be the window background.** Near-black only turns the light flash into a dark one:
+  luma 2 against the window's 32 for about 30 ms, in 8 of 10 starts. With `#202020` no start flashed.
+- **It keeps the open animation**, which the cloak takes away: the window fades in over about 9 frames, and it
+  is on screen after 23 ms instead of about 100 ms. Its content arrives no earlier than without the fix.
+- **Together with the cloak** it looks exactly like the cloak alone: the window appears in one step at about
+  100 ms. Nothing gained.
+- **With an expensive first frame** the window shows the empty `#202020` surface for 0.9 s until the content
+  arrives. The probe counts those frames as a dark flash only because the finished window, with its heavy
+  element, is brighter (48) than the background; with the cloak the window would stay invisible instead.
+- On this machine `FirstFrameCloak` showed no flash in 10 of 10 starts, unlike the comment in #5853 that
+  says the cloak does not fix the white flash.
+
+Limits: the API and the attribute are undocumented and may change; before 24H2 the call fails, so a window
+there needs the cloak (not measured here). The fill colour is fixed per window: a window whose background
+changes with the theme must set it again. One machine and one OS build; WinUI 3 was not tried.
 
 ## WinUI 3
 
@@ -555,6 +615,7 @@ flags (`baseline`) FlashLab is the repro without the fix.
 | `heavy` | Adds an element whose first frame takes the render thread about 0.9 s |
 | `erase` | Paints the client area `#202020` on `WM_ERASEBKGND` |
 | `nofade` | `DWMWA_TRANSITIONS_FORCEDISABLED`: no open animation |
+| `fill=RRGGBB` | In `SourceInitialized`: the colour DWM fills the window with until it has painted (undocumented `SetWindowCompositionAttribute`, `WCA_REDIRECTIONBITMAP_FILL_COLOR` = 0x23, Windows 11 24H2+; from the sample in dotnet/wpf#5853). Black resets the attribute, so near-black is `010000` |
 | `sync` | `Show()`, then layout and render synchronously before `Application.Run` |
 | `forcefast` | In `Loaded`: render and wait for the present (`MediaContext.CompleteRender`, via reflection) |
 | `delayrender` | In `Loaded`: sleep 300 ms, delaying the first frame |

@@ -35,6 +35,12 @@ internal static class Program
     [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateSolidBrush(int colorref);
 
+    // Undocumented: WINDOWCOMPOSITIONATTRIBDATA and WCA_REDIRECTIONBITMAP_FILL_COLOR (0x23, Windows 11 24H2+), from
+    // the sample in dotnet/wpf#5853.
+    private const int WCA_REDIRECTIONBITMAP_FILL_COLOR = 0x23;
+    [StructLayout(LayoutKind.Sequential)] private struct WindowCompositionAttributeData { public int Attribute; public IntPtr Data; public int Size; }
+    [DllImport("user32.dll", SetLastError = true)] private static extern bool SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
+
     private static readonly IntPtr DarkBrush = CreateSolidBrush(0x202020);
     private static readonly Dictionary<int, int> SeenMessages = [];
     private static string[] _flags = [];
@@ -140,6 +146,8 @@ internal static class Program
             source.AddHook(LogMessages);
             if (Has("erase")) source.AddHook(PaintBackground);
             if (Has("nofade")) SetAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, 1);
+            if (_flags.FirstOrDefault(f => f.StartsWith("fill=", StringComparison.Ordinal)) is { } fill)
+                Log(SetFillColor(hwnd, Convert.ToInt32(fill["fill=".Length..], 16)));
             if (cloak is null) return;
 
             if (Has("rgn"))
@@ -294,6 +302,21 @@ internal static class Program
 
     private static void SetAttribute(IntPtr hwnd, int attribute, int value) =>
         DwmSetWindowAttribute(hwnd, attribute, ref value, sizeof(int));
+
+    // fill=RRGGBB: the colour DWM fills the redirection bitmap with until the window has painted. The value is a
+    // COLORREF (0x00BBGGRR) marked with 0xFF in the high byte; a stored 0 resets to the default, so black is 010000.
+    private static string SetFillColor(IntPtr hwnd, int rgb)
+    {
+        var value = unchecked((int)0xFF000000) | ((rgb >> 16) & 0xFF) | (rgb & 0xFF00) | ((rgb & 0xFF) << 16);
+        var buffer = Marshal.AllocHGlobal(sizeof(int));
+        try
+        {
+            Marshal.WriteInt32(buffer, value);
+            var data = new WindowCompositionAttributeData { Attribute = WCA_REDIRECTIONBITMAP_FILL_COLOR, Data = buffer, Size = sizeof(int) };
+            return SetWindowCompositionAttribute(hwnd, ref data) ? $"FillColor {rgb:X6}" : $"FillColorFailed {Marshal.GetLastPInvokeError()}";
+        }
+        finally { Marshal.FreeHGlobal(buffer); }
+    }
 
     // Internal MediaContext.CompleteRender: "issue a sync flush, which will only return after the last frame
     // is presented". Reflection is fine for an experiment; do not ship this.
